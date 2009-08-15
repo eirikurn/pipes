@@ -29,18 +29,33 @@ end
 
 # Ruby 1.9 only supports Fibers
 class FiberWrapper
+	class YieldSignal
+		attr_accessor :data
+		def initialize(data)
+			@data = data
+		end
+	end
+	
 	def initialize(&block)
 		@fiber = Fiber.new &block
 	end
 	
 	def resume
-		@fiber.resume
+		value = @fiber.resume
+		
+		# Fiber has finished running, let's ignore final expression.
+		return nil unless value.instance_of? YieldSignal
+		
+		# The fiber yielded a single value, return it
+		return value.data[0] if value.data.length == 1
+		
+		# The fiber yielded multiple values, return them
+		return value.data
 	end
 	
 	def yield(*data)
-		Fiber.yield(data)
+		Fiber.yield(YieldSignal.new(data))
 	end
-	
 end
 
 # Ruby 1.8 only supports Generators
@@ -204,20 +219,24 @@ end
 
 
 class HashProcessor < Processor
-	def output(hash = {})
+	def yield(hash = {})
 		obj = self.class.proxy_class.new hash
 		
 		yield(obj) if block_given?
 		
 		raise "#{name} forgot to provide value for '#{p}'" if p = self.class.provides.find {|p| obj.hash[p].nil?}
-		@generator.yield(obj.hash) unless obj.rejected?
+		super(obj.hash) unless obj.rejected?
 	end
 	def process
-		while hash = input
+		while hash = source.next
 			raise "#{name} requires a value for '#{p}" if p = self.class.requires.find {|p| hash[p].nil?}
-			output(hash) { |o| process_object(o) }
+			self.yield(hash) { |o| handle_object(o) }
 		end
-	end 
+	end
+	def handle_object(obj)
+		@block.call(obj) if @block
+		obj
+	end
 	
 	def self.strict?
 		return @strict unless @strict.nil?

@@ -1,5 +1,4 @@
-require 'test/unit'
-require 'Processor'
+require File.dirname(__FILE__)+'/test_helper'
 
 class TC_Generator < Test::Unit::TestCase
 	def test_resume_should_call_block
@@ -181,7 +180,7 @@ class TC_HashProcessor < Test::Unit::TestCase
 	class Adder < HashProcessor
 		requires :numberA
 		provides :result
-		def process_object(obj)
+		def handle_object(obj)
 			obj.result = obj.numberA + 10
 		end
 	end
@@ -189,14 +188,14 @@ class TC_HashProcessor < Test::Unit::TestCase
 	def test_adder
 		source = Source.new [{:numberA => 2}]
 		adder = source | Adder.new
-		hash = adder.resume
+		hash = adder.next
 		assert_equal 12, hash[:result]
 	end
 	
 	def test_generic_processor
 		source = Source.new [{:numberA => 10}]
 		chain = source | HashProcessor.new {|obj| obj.result = obj.numberA + 5 }
-		hash = chain.resume
+		hash = chain.next
 		assert_equal 15, hash[:result]
 	end
 end
